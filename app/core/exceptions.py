@@ -24,7 +24,16 @@ async def validation_exception_handler(
     request: Request, exc: RequestValidationError | ValidationError
 ) -> JSONResponse:
     errors = exc.errors() if hasattr(exc, "errors") else []
+    sanitized_errors = []
+    for error in errors:
+        error_copy = dict(error)
+        if "ctx" in error_copy and "error" in error_copy["ctx"]:
+            ctx_copy = dict(error_copy["ctx"])
+            ctx_copy["error"] = str(ctx_copy["error"])
+            error_copy["ctx"] = ctx_copy
+        sanitized_errors.append(error_copy)
+        
     return JSONResponse(
         status_code=422,
-        content={"error": {"message": "Validation Error", "details": errors}},
+        content={"error": {"message": "Validation Error", "details": sanitized_errors}},
     )
