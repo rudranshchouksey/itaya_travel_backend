@@ -55,3 +55,8 @@ class User(BaseModel):
         back_populates="owner",
         cascade="all, delete-orphan",
     )
+    bookings: Mapped[list["Booking"]] = relationship(
+        "Booking",
+        primaryjoin="User.id == Booking.user_id",
+        cascade="all, delete-orphan",
+    )

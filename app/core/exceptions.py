@@ -1,7 +1,7 @@
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
+from pydantic import ValidationError as PydanticValidationError
 
 
 class AppException(Exception):
@@ -13,6 +13,21 @@ class AppException(Exception):
         self.details = details or {}
 
 
+class NotFoundError(AppException):
+    def __init__(self, message: str = "Not Found", details: dict | None = None):
+        super().__init__(message, status_code=404, details=details)
+
+
+class ValidationError(AppException):
+    def __init__(self, message: str = "Validation Error", details: dict | None = None):
+        super().__init__(message, status_code=422, details=details)
+
+
+class PermissionDeniedError(AppException):
+    def __init__(self, message: str = "Permission Denied", details: dict | None = None):
+        super().__init__(message, status_code=403, details=details)
+
+
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
@@ -21,7 +36,7 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
 
 
 async def validation_exception_handler(
-    request: Request, exc: RequestValidationError | ValidationError
+    request: Request, exc: RequestValidationError | PydanticValidationError
 ) -> JSONResponse:
     errors = exc.errors() if hasattr(exc, "errors") else []
     sanitized_errors = []

@@ -107,6 +107,11 @@ class Trip(Base):
     participants = relationship(
         "TripParticipant", back_populates="trip", cascade="all, delete-orphan"
     )
+    bookings: Mapped[list["Booking"]] = relationship(
+        "Booking",
+        primaryjoin="Trip.id == Booking.trip_id",
+        back_populates="trip",
+    )
 
 
 class TripDay(Base):

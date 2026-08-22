@@ -8,14 +8,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import settings
 from app.modules.auth.models import RevokedToken  # noqa
+from app.modules.bookings.models import *  # noqa
 from app.modules.destinations.models import Destination  # noqa
-from app.modules.experiences.models import (  # noqa
-    Experience,
-    ExperienceAvailability,
-    ExperienceCategory,
-    ExperienceCategoryLink,
-    ExperienceImage,
-)
+from app.modules.experiences.models import *  # noqa
 from app.modules.listings.models import (  # noqa
     Amenity,
     Listing,
