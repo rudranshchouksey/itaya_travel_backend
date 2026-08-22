@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.modules.auth.models import RevokedToken  # noqa
 from app.modules.destinations.models import Destination  # noqa
 from app.modules.users.models import User  # noqa
+from app.modules.listings.models import Amenity, Listing, ListingAmenity, ListingImage, ListingAvailability  # noqa
 from app.shared.models import Base
 
 # this is the Alembic Config object, which provides
