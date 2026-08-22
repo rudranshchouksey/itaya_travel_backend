@@ -2,13 +2,13 @@ import uuid
 from typing import Any
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     ForeignKey,
     Integer,
     String,
     Text,
     UniqueConstraint,
-    JSON,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

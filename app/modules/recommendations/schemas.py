@@ -1,8 +1,9 @@
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, Field
 from fastapi import Query
+from pydantic import BaseModel, Field
+
 
 class RecommendationPreferences(BaseModel):
     destination_id: uuid.UUID | None = None

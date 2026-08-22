@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, Query
-from typing import Literal
 import uuid
+from typing import Literal
+
+from fastapi import APIRouter, Query
 
 from app.api.deps import SessionDep
 from app.modules.recommendations.schemas import (

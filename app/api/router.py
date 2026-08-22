@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.health import router as health_router
+from app.modules.ai.router import router as ai_router
 from app.modules.auth.router import router as auth_router
 from app.modules.bookings.router import router as bookings_router
 from app.modules.destinations.router import router as destinations_router
@@ -29,3 +30,4 @@ api_router.include_router(bookings_router, prefix="/bookings", tags=["Bookings"]
 api_router.include_router(reviews_router)
 api_router.include_router(search_router)
 api_router.include_router(recommendations_router)
+api_router.include_router(ai_router)

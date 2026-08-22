@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, timedelta, time
+from datetime import date, time, timedelta
 from decimal import Decimal
 
 import pytest
