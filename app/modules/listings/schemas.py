@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.listings.models import ListingStatus, PropertyType, VerificationStatus
 
@@ -11,7 +11,7 @@ class AmenityRead(BaseModel):
     id: uuid.UUID
     name: str
     icon_url: str | None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -20,7 +20,7 @@ class ListingImageRead(BaseModel):
     url: str
     is_primary: bool
     display_order: int
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -28,7 +28,7 @@ class ListingAvailabilityRead(BaseModel):
     date: date
     price: Decimal
     is_available: bool
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -45,7 +45,7 @@ class ListingSummary(BaseModel):
     status: ListingStatus
     verification_status: VerificationStatus
     images: list[ListingImageRead] = []
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 

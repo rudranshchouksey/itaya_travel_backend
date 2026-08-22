@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Sequence
-
 from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.deps import SessionDep
@@ -15,6 +15,7 @@ from app.modules.listings.schemas import (
 from app.modules.listings.service import ListingService
 
 router = APIRouter()
+
 
 @router.get("", response_model=list[ListingSummary])
 async def get_listings(
@@ -36,6 +37,7 @@ async def get_listings(
     )
     return listings
 
+
 @router.get("/{slug}", response_model=ListingRead)
 async def get_listing_by_slug(slug: str, session: SessionDep) -> ListingRead:
     listing = await ListingService.get_by_slug(session, slug=slug, public_only=True)
@@ -46,6 +48,7 @@ async def get_listing_by_slug(slug: str, session: SessionDep) -> ListingRead:
         )
     return listing
 
+
 @router.get("/{id}/availability", response_model=list[ListingAvailabilityRead])
 async def get_listing_availability(
     id: uuid.UUID,
@@ -53,7 +56,9 @@ async def get_listing_availability(
     params: AvailabilityQueryParams = Depends(),  # noqa: B008
 ) -> Sequence[ListingAvailabilityRead]:
     if params.end_date < params.start_date:
-        raise HTTPException(status_code=400, detail="end_date cannot be before start_date")
+        raise HTTPException(
+            status_code=400, detail="end_date cannot be before start_date"
+        )
     if params.start_date < date.today():  # noqa: DTZ011
         raise HTTPException(status_code=400, detail="start_date cannot be in the past")
 

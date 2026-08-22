@@ -9,8 +9,21 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from app.core.config import settings
 from app.modules.auth.models import RevokedToken  # noqa
 from app.modules.destinations.models import Destination  # noqa
-from app.modules.users.models import User  # noqa
-from app.modules.listings.models import Amenity, Listing, ListingAmenity, ListingImage, ListingAvailability  # noqa
+from app.modules.experiences.models import (  # noqa
+    Experience,
+    ExperienceAvailability,
+    ExperienceCategory,
+    ExperienceCategoryLink,
+    ExperienceImage,
+)
+from app.modules.listings.models import (  # noqa
+    Amenity,
+    Listing,
+    ListingAmenity,
+    ListingAvailability,
+    ListingImage,
+)
+from app.modules.users.models import User, UserRole  # noqa
 from app.shared.models import Base
 
 # this is the Alembic Config object, which provides

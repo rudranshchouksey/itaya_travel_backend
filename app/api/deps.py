@@ -52,7 +52,9 @@ async def get_current_user(session: SessionDep, token: TokenDep) -> User:
     except ValueError:
         raise credentials_exception
 
-    stmt = select(User).where(User.id == user_uuid)
+    from sqlalchemy.orm import selectinload
+
+    stmt = select(User).options(selectinload(User.roles)).where(User.id == user_uuid)
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
 

@@ -1,7 +1,31 @@
-from sqlalchemy import Boolean, String
-from sqlalchemy.orm import Mapped, mapped_column
+import uuid
+from enum import Enum as PyEnum
+
+from sqlalchemy import Boolean, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.shared.models import BaseModel
+
+
+class Role(str, PyEnum):
+    TRAVELER = "traveler"
+    HOST = "host"
+    GUIDE = "guide"
+    EXPERIENCE_PROVIDER = "experience_provider"
+    SERVICE_PROVIDER = "service_provider"
+
+
+class UserRole(BaseModel):
+    __tablename__ = "user_roles"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    role: Mapped[Role] = mapped_column(
+        Enum(Role, name="role_enum"), nullable=False, index=True
+    )
+
+    __table_args__ = (UniqueConstraint("user_id", "role", name="uq_user_role"),)
 
 
 class User(BaseModel):
@@ -19,3 +43,9 @@ class User(BaseModel):
     profile_image_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    roles: Mapped[list[UserRole]] = relationship(
+        "UserRole",
+        primaryjoin="User.id == UserRole.user_id",
+        cascade="all, delete-orphan",
+    )

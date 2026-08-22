@@ -41,11 +41,7 @@ async def listing_host(db_session: AsyncSession) -> User:
 
 @pytest_asyncio.fixture
 async def listing_destination(db_session: AsyncSession) -> Destination:
-    dest_in = DestinationCreate(
-        name="Bali",
-        slug="bali-id",
-        country="Indonesia"
-    )
+    dest_in = DestinationCreate(name="Bali", slug="bali-id", country="Indonesia")
     return await DestinationService.create_destination(db_session, dest_in)
 
 
@@ -64,7 +60,7 @@ async def sample_listing(
         beds=2,
         bathrooms=2.0,
         status=ListingStatus.PUBLISHED,
-        verification_status=VerificationStatus.VERIFIED
+        verification_status=VerificationStatus.VERIFIED,
     )
     return await ListingService.create_listing(db_session, listing_in)
 
@@ -80,7 +76,7 @@ async def sample_availability(
             listing_id=sample_listing.id,
             date=today + timedelta(days=i),
             price=Decimal("150.00"),
-            is_available=(i != 2)  # day 2 is unavailable
+            is_available=(i != 2),  # day 2 is unavailable
         )
         db_session.add(avail)
         availabilities.append(avail)
@@ -98,7 +94,7 @@ async def test_listing_creation(
         title="Test Creation",
         slug="test-creation",
         property_type=PropertyType.HOTEL,
-        guest_capacity=2
+        guest_capacity=2,
     )
     listing = await ListingService.create_listing(db_session, listing_in)
     assert listing.id is not None
@@ -121,7 +117,7 @@ async def test_listing_filtering_and_pagination(
     async_client: AsyncClient,
     db_session: AsyncSession,
     listing_host: User,
-    listing_destination: Destination
+    listing_destination: Destination,
 ):
     # Create multiple listings
     for i in range(3):
@@ -133,7 +129,7 @@ async def test_listing_filtering_and_pagination(
             property_type=PropertyType.APARTMENT,
             guest_capacity=i + 1,
             status=ListingStatus.PUBLISHED,
-            verification_status=VerificationStatus.VERIFIED
+            verification_status=VerificationStatus.VERIFIED,
         )
         await ListingService.create_listing(db_session, l_in)
 
@@ -160,7 +156,7 @@ async def test_listing_filtering_and_pagination(
 async def test_availability_lookup(
     async_client: AsyncClient,
     sample_listing: Listing,
-    sample_availability: list[ListingAvailability]
+    sample_availability: list[ListingAvailability],
 ):
     today = date.today()  # noqa: DTZ011
     start_date = today.isoformat()
@@ -197,7 +193,7 @@ async def test_public_access_and_status(
     async_client: AsyncClient,
     db_session: AsyncSession,
     listing_host: User,
-    listing_destination: Destination
+    listing_destination: Destination,
 ):
     # Draft listing shouldn't be publicly visible
     l_in = ListingCreate(
@@ -207,7 +203,7 @@ async def test_public_access_and_status(
         slug="draft-listing",
         property_type=PropertyType.HOMESTAY,
         guest_capacity=1,
-        status=ListingStatus.DRAFT
+        status=ListingStatus.DRAFT,
     )
     await ListingService.create_listing(db_session, l_in)
 
@@ -220,7 +216,7 @@ async def test_database_constraints(
     db_session: AsyncSession,
     listing_host: User,
     listing_destination: Destination,
-    sample_listing: Listing
+    sample_listing: Listing,
 ):
     # Unique slug constraint
     l_in = ListingCreate(
@@ -229,7 +225,7 @@ async def test_database_constraints(
         title="Duplicate Slug",
         slug=sample_listing.slug,
         property_type=PropertyType.RESORT,
-        guest_capacity=1
+        guest_capacity=1,
     )
     with pytest.raises(IntegrityError):
         await ListingService.create_listing(db_session, l_in)
@@ -237,13 +233,14 @@ async def test_database_constraints(
 
 @pytest.mark.asyncio
 async def test_n_plus_one_queries_mitigation(
-    async_client: AsyncClient,
-    sample_listing: Listing
+    async_client: AsyncClient, sample_listing: Listing
 ):
     # Ensure that fetching listings uses selectinload correctly
-    # While we can't easily assert raw SQL counts in sqlite memory here, 
+    # While we can't easily assert raw SQL counts in sqlite memory here,
     # we ensure the nested properties resolve without detached instance errors
-    res = await async_client.get(f"{settings.API_V1_PREFIX}/listings/{sample_listing.slug}")
+    res = await async_client.get(
+        f"{settings.API_V1_PREFIX}/listings/{sample_listing.slug}"
+    )
     assert res.status_code == 200
     data = res.json()
     assert "images" in data
