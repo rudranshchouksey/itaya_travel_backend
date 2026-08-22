@@ -130,3 +130,32 @@ async def razorpay_webhook(
         body=body,
     )
     return {"status": "ok"}
+
+
+@router.post(
+    "/webhooks/stripe",
+    status_code=status.HTTP_200_OK,
+    summary="Stripe webhook listener",
+)
+async def stripe_webhook(
+    request: Request,
+    session: SessionDep,
+    stripe_signature: Annotated[str | None, Header()] = None,
+):
+    body = await request.body()
+    signature = stripe_signature or ""
+    try:
+        payload = json.loads(body.decode("utf-8")) if body else {}
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON body"
+        )
+
+    await PaymentService.process_webhook(
+        session=session,
+        provider="stripe",
+        payload=payload,
+        signature=signature,
+        body=body,
+    )
+    return {"status": "ok"}

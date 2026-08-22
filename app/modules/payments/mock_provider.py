@@ -104,6 +104,10 @@ def get_payment_provider() -> Any:
         from app.modules.payments.razorpay_provider import RazorpayPaymentProvider
 
         return RazorpayPaymentProvider()
+    elif settings.PAYMENT_PROVIDER.lower() == "stripe":
+        from app.modules.payments.stripe_provider import StripePaymentProvider
+        
+        return StripePaymentProvider()
     else:
         return MockPaymentProvider()
 

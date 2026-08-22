@@ -382,32 +382,47 @@ class PaymentService:
         session.add(webhook_event)
 
         # Process payment events
-        if event_type in ["payment.captured", "order.paid"]:
-            payment_entity = (
-                payload.get("payload", {}).get("payment", {}).get("entity", {})
-            )
-            order_id = payment_entity.get("order_id") or payload.get("payload", {}).get(
-                "order", {}
-            ).get("entity", {}).get("id")
-            payment_id_str = payment_entity.get("id")
+        order_id = None
+        payment_id_str = None
+        is_captured = False
 
-            if order_id:
-                stmt_p = (
-                    select(Payment)
-                    .options(selectinload(Payment.booking).selectinload(Booking.items))
-                    .where(Payment.provider_order_id == order_id)
+        if provider == "razorpay":
+            if event_type in ["payment.captured", "order.paid"]:
+                payment_entity = (
+                    payload.get("payload", {}).get("payment", {}).get("entity", {})
                 )
-                payment = (await session.execute(stmt_p)).scalar_one_or_none()
-                if payment and payment.status != PaymentStatus.CAPTURED:
-                    payment.status = PaymentStatus.CAPTURED
-                    payment.provider_payment_id = payment_id_str
-                    payment.captured_at = datetime.now(UTC)
-                    if payment.booking and validate_booking_transition(
-                        payment.booking.booking_status, BookingStatus.CONFIRMED
-                    ):
-                        payment.booking.booking_status = BookingStatus.CONFIRMED
-                        await FinancialService.record_booking_financials(
-                            session, payment.booking
-                        )
+                order_id = payment_entity.get("order_id") or payload.get("payload", {}).get(
+                    "order", {}
+                ).get("entity", {}).get("id")
+                payment_id_str = payment_entity.get("id")
+                is_captured = True
+        elif provider == "stripe":
+            if event_type == "payment_intent.succeeded":
+                payment_intent = payload.get("data", {}).get("object", {})
+                payment_id_str = payment_intent.get("id")
+                # We stored our internal booking ID or payment reference in metadata or receipt, 
+                # but we also have provider_order_id in our DB as the PaymentIntent ID.
+                # So order_id for Stripe IS the payment_id_str.
+                order_id = payment_id_str
+                is_captured = True
+
+        if is_captured and order_id:
+            stmt_p = (
+                select(Payment)
+                .options(selectinload(Payment.booking).selectinload(Booking.items))
+                .where(Payment.provider_order_id == order_id)
+            )
+            payment = (await session.execute(stmt_p)).scalar_one_or_none()
+            if payment and payment.status != PaymentStatus.CAPTURED:
+                payment.status = PaymentStatus.CAPTURED
+                payment.provider_payment_id = payment_id_str
+                payment.captured_at = datetime.now(UTC)
+                if payment.booking and validate_booking_transition(
+                    payment.booking.booking_status, BookingStatus.CONFIRMED
+                ):
+                    payment.booking.booking_status = BookingStatus.CONFIRMED
+                    await FinancialService.record_booking_financials(
+                        session, payment.booking
+                    )
 
         await session.commit()

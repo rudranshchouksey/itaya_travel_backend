@@ -19,7 +19,22 @@ class Settings(BaseSettings):
 
     # Platform financials
     PLATFORM_COMMISSION_RATE: float = 0.15  # 15%
+    # Stripe configurations
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+
+    # Currency & Exchange
     DEFAULT_CURRENCY: str = "INR"
+    SUPPORTED_CURRENCIES: str = "INR,USD,EUR,GBP,AED,SGD,JPY"
+    CURRENCY_API_URL: str = ""
+    CURRENCY_API_KEY: str = ""
+
+    # Retry configurations
+    RETRY_MAX_ATTEMPTS: int = 3
+    RETRY_INITIAL_DELAY_SECONDS: float = 1.0
+    RETRY_MAX_DELAY_SECONDS: float = 10.0
+    RETRY_BACKOFF_MULTIPLIER: float = 2.0
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
