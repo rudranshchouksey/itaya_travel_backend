@@ -47,6 +47,12 @@ async def prepare_database():
 
 
 @pytest_asyncio.fixture
+async def db_session():
+    async with TestSessionLocal() as session:
+        yield session
+
+
+@pytest_asyncio.fixture
 async def async_client():
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
