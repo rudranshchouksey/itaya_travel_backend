@@ -16,7 +16,9 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest_asyncio.fixture
-async def setup_recommendation_data(db_session: AsyncSession) -> tuple[Destination, Destination]:
+async def setup_recommendation_data(
+    db_session: AsyncSession,
+) -> tuple[Destination, Destination]:
     user = User(
         email=f"rechost_{uuid.uuid4().hex[:8]}@itvaya.com",
         password_hash="hash",
@@ -27,8 +29,12 @@ async def setup_recommendation_data(db_session: AsyncSession) -> tuple[Destinati
     db_session.add(user)
     await db_session.flush()
 
-    dest1 = Destination(name="Bali", slug=f"bali-rec-{uuid.uuid4().hex[:8]}", country="ID")
-    dest2 = Destination(name="Tokyo", slug=f"tokyo-rec-{uuid.uuid4().hex[:8]}", country="JP")
+    dest1 = Destination(
+        name="Bali", slug=f"bali-rec-{uuid.uuid4().hex[:8]}", country="ID"
+    )
+    dest2 = Destination(
+        name="Tokyo", slug=f"tokyo-rec-{uuid.uuid4().hex[:8]}", country="JP"
+    )
     db_session.add_all([dest1, dest2])
     await db_session.flush()
 
@@ -75,14 +81,17 @@ async def setup_recommendation_data(db_session: AsyncSession) -> tuple[Destinati
         status=ExperienceStatus.PUBLISHED,
     )
     db_session.add_all([exp1, exp2])
-    
+
     await db_session.commit()
     return dest1, dest2
 
 
 async def test_valid_ranking(async_client: AsyncClient, setup_recommendation_data):
     dest1, dest2 = setup_recommendation_data
-    res = await async_client.get(f"{settings.API_V1_PREFIX}/recommendations", params={"destination_id": str(dest1.id)})
+    res = await async_client.get(
+        f"{settings.API_V1_PREFIX}/recommendations",
+        params={"destination_id": str(dest1.id)},
+    )
     assert res.status_code == 200
     results = res.json()["results"]
     assert len(results) > 0
@@ -92,10 +101,15 @@ async def test_valid_ranking(async_client: AsyncClient, setup_recommendation_dat
             assert r["score"] > 1.0
 
 
-async def test_deterministic_ranking(async_client: AsyncClient, setup_recommendation_data):
+async def test_deterministic_ranking(
+    async_client: AsyncClient, setup_recommendation_data
+):
     dest1, dest2 = setup_recommendation_data
     # Preference for villas
-    res = await async_client.get(f"{settings.API_V1_PREFIX}/recommendations", params={"preferred_types": ["villa"]})
+    res = await async_client.get(
+        f"{settings.API_V1_PREFIX}/recommendations",
+        params={"preferred_types": ["villa"]},
+    )
     assert res.status_code == 200
     results = res.json()["results"]
     # In deterministic logic, it should filter by property type for listings
@@ -114,5 +128,7 @@ async def test_empty_preferences(async_client: AsyncClient, setup_recommendation
 
 
 async def test_invalid_input(async_client: AsyncClient, setup_recommendation_data):
-    res = await async_client.get(f"{settings.API_V1_PREFIX}/recommendations", params={"limit": 100}) # > 50
+    res = await async_client.get(
+        f"{settings.API_V1_PREFIX}/recommendations", params={"limit": 100}
+    )  # > 50
     assert res.status_code == 422

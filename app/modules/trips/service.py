@@ -163,6 +163,7 @@ class TripService:
             setattr(db_obj, field, value)
 
         from app.modules.trips.models import TripItemType
+
         if db_obj.item_type != TripItemType.STAY and db_obj.listing_id:
             raise ValueError("Only stay items can have a listing_id")
         if db_obj.item_type != TripItemType.EXPERIENCE and db_obj.experience_id:

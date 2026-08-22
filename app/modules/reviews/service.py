@@ -29,7 +29,7 @@ class ReviewService:
             .where(BookingItem.id == review_in.booking_item_id)
         )
         booking_item = (await session.execute(stmt)).scalar_one_or_none()
-        
+
         if not booking_item:
             raise NotFoundError("Booking item not found")
 
@@ -71,7 +71,7 @@ class ReviewService:
             body=review_in.body,
             images=review_in.images,
         )
-        
+
         session.add(review_db)
         await session.commit()
         await session.refresh(review_db)

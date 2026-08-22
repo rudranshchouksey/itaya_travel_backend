@@ -12,15 +12,21 @@ from app.modules.search.schemas import SearchParams, SearchResponse, SearchResul
 
 class SearchServiceInterface(ABC):
     @abstractmethod
-    async def search(self, session: AsyncSession, params: SearchParams) -> SearchResponse:
+    async def search(
+        self, session: AsyncSession, params: SearchParams
+    ) -> SearchResponse:
         pass
 
 
 class PostgresSearchService(SearchServiceInterface):
-    async def search(self, session: AsyncSession, params: SearchParams) -> SearchResponse:
+    async def search(
+        self, session: AsyncSession, params: SearchParams
+    ) -> SearchResponse:
         results: list[SearchResultItem] = []
-        
-        limit_per_type = params.limit if params.type != "all" else max(1, params.limit // 2)
+
+        limit_per_type = (
+            params.limit if params.type != "all" else max(1, params.limit // 2)
+        )
 
         # 1. Search Listings
         if params.type in ["listing", "all"]:
@@ -33,10 +39,7 @@ class PostgresSearchService(SearchServiceInterface):
             if params.query:
                 q = f"%{params.query}%"
                 stmt = stmt.where(
-                    or_(
-                        Listing.title.ilike(q),
-                        Listing.description.ilike(q)
-                    )
+                    or_(Listing.title.ilike(q), Listing.description.ilike(q))
                 )
 
             if params.destination_id:
@@ -44,13 +47,13 @@ class PostgresSearchService(SearchServiceInterface):
 
             if params.sort_by == "newest":
                 stmt = stmt.order_by(Listing.created_at.desc())
-            
+
             # Basic subquery to find listings with matching availability/prices
             # For simplicity, we just filter by the availability price limits and join
             # but right now we don't strictly require availability checks for a "basic" search
             # We'll just enforce it if min_price or max_price is provided
 
-            # For budget filter, we would join Availability. Since it's a basic search, 
+            # For budget filter, we would join Availability. Since it's a basic search,
             # we can just fetch and filter in python if needed, or join properly.
             # We'll skip complex price sorting in DB for this Phase 9 "foundation".
 
@@ -84,7 +87,7 @@ class PostgresSearchService(SearchServiceInterface):
                             "destination_id": listing.destination_id,
                             "images": [],
                             "amenities": [],
-                        }
+                        },
                     )
                 )
 
@@ -92,27 +95,30 @@ class PostgresSearchService(SearchServiceInterface):
         if params.type in ["experience", "all"]:
             stmt = (
                 select(Experience)
-                .options(selectinload(Experience.images), selectinload(Experience.categories))
+                .options(
+                    selectinload(Experience.images), selectinload(Experience.categories)
+                )
                 .where(Experience.status == ExperienceStatus.PUBLISHED)
             )
 
             if params.query:
                 q = f"%{params.query}%"
                 stmt = stmt.where(
-                    or_(
-                        Experience.title.ilike(q),
-                        Experience.description.ilike(q)
-                    )
+                    or_(Experience.title.ilike(q), Experience.description.ilike(q))
                 )
 
             if params.destination_id:
                 stmt = stmt.where(Experience.destination_id == params.destination_id)
 
             if params.min_price is not None:
-                stmt = stmt.where(Experience.base_price >= Decimal(str(params.min_price)))
-            
+                stmt = stmt.where(
+                    Experience.base_price >= Decimal(str(params.min_price))
+                )
+
             if params.max_price is not None:
-                stmt = stmt.where(Experience.base_price <= Decimal(str(params.max_price)))
+                stmt = stmt.where(
+                    Experience.base_price <= Decimal(str(params.max_price))
+                )
 
             if params.sort_by == "newest":
                 stmt = stmt.order_by(Experience.created_at.desc())
@@ -148,19 +154,16 @@ class PostgresSearchService(SearchServiceInterface):
                             "destination_id": exp.destination_id,
                             "images": [],
                             "categories": [],
-                        }
+                        },
                     )
                 )
 
         # Combine and mock sort by relevance if needed
         # In a real app, this would be heavily relying on Postgres ts_rank or OpenSearch scores
         if params.sort_by == "relevance":
-            pass # keep as is for now
+            pass  # keep as is for now
 
-        return SearchResponse(
-            total_count=len(results),
-            results=results
-        )
+        return SearchResponse(total_count=len(results), results=results)
 
 
 search_service = PostgresSearchService()

@@ -13,13 +13,17 @@ class AITripPlanRequest(BaseModel):
     traveler_count: int = Field(1, ge=1)
     travel_style: Literal["relaxed", "balanced", "packed"] = "balanced"
     interests: list[str] = Field(default_factory=list)
-    preferred_accommodation: Literal["hotel", "hostel", "apartment", "villa", "any"] = "any"
+    preferred_accommodation: Literal["hotel", "hostel", "apartment", "villa", "any"] = (
+        "any"
+    )
     free_form_request: str | None = None
+
 
 class AITripOptimizationRequest(BaseModel):
     trip_id: uuid.UUID
     instruction: str
     target_budget: float | None = None
+
 
 class AIProposedTripItem(BaseModel):
     item_type: Literal["stay", "experience", "transport", "activity", "custom"]
@@ -29,10 +33,12 @@ class AIProposedTripItem(BaseModel):
     listing_id: uuid.UUID | None = None
     experience_id: uuid.UUID | None = None
 
+
 class AIProposedTripDay(BaseModel):
     date: date
     title: str
     items: list[AIProposedTripItem]
+
 
 class AITripPlanResponse(BaseModel):
     title: str

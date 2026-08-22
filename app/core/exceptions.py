@@ -47,7 +47,7 @@ async def validation_exception_handler(
             ctx_copy["error"] = str(ctx_copy["error"])
             error_copy["ctx"] = ctx_copy
         sanitized_errors.append(error_copy)
-        
+
     return JSONResponse(
         status_code=422,
         content={"error": {"message": "Validation Error", "details": sanitized_errors}},

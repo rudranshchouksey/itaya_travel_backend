@@ -34,6 +34,21 @@ packages = ["app"]
 line-length = 88
 target-version = "py312"
 
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501", # line too long (handled by formatter)
+    "UP042", # str, Enum inheritance standard for SQLAlchemy models
+    "E712",  # comparison to True in SQLAlchemy binary expressions
+    "F821",  # undefined name in string type annotations
+]
+
 [tool.pytest.ini_options]
 addopts = "-v"
 testpaths = [

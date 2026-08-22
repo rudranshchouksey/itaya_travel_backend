@@ -4,7 +4,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.modules.bookings.models import BookingStatus, PaymentStatus
+from app.modules.bookings.models import BookingStatus
+from app.modules.payments.models import PaymentStatus
 from app.modules.trips.models import TripItemType
 
 
@@ -44,14 +45,24 @@ class BookingItemCreate(BookingItemBase):
     @model_validator(mode="after")
     def validate_item(self) -> "BookingItemCreate":
         if self.item_type == TripItemType.STAY:
-            assert self.listing_id is not None, "listing_id is required for stay bookings"
-            assert self.start_date is not None, "start_date is required for stay bookings"
+            assert self.listing_id is not None, (
+                "listing_id is required for stay bookings"
+            )
+            assert self.start_date is not None, (
+                "start_date is required for stay bookings"
+            )
             assert self.end_date is not None, "end_date is required for stay bookings"
             assert self.start_date < self.end_date, "end_date must be after start_date"
         elif self.item_type == TripItemType.EXPERIENCE:
-            assert self.experience_id is not None, "experience_id is required for experience bookings"
-            assert self.start_date is not None, "start_date is required for experience bookings"
-            assert self.start_time is not None, "start_time is required for experience bookings"
+            assert self.experience_id is not None, (
+                "experience_id is required for experience bookings"
+            )
+            assert self.start_date is not None, (
+                "start_date is required for experience bookings"
+            )
+            assert self.start_time is not None, (
+                "start_time is required for experience bookings"
+            )
         else:
             raise ValueError(f"Booking not supported for item type: {self.item_type}")
         return self
@@ -60,8 +71,12 @@ class BookingItemCreate(BookingItemBase):
 class BookingItemRead(BookingItemBase):
     id: uuid.UUID
     booking_id: uuid.UUID
+    provider_id: uuid.UUID | None
     price_snapshot: Decimal
     subtotal: Decimal
+    taxes: Decimal
+    fees: Decimal
+    total: Decimal
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -74,7 +89,7 @@ class BookingCreate(BookingBase):
     currency: str = Field(..., max_length=3)
     items: list[BookingItemCreate] = Field(..., min_length=1)
     guests: list[BookingGuestCreate] = Field(..., min_length=1)
-    
+
     @model_validator(mode="after")
     def validate_primary_guest(self) -> "BookingCreate":
         primary_guests = [g for g in self.guests if g.is_primary]
@@ -89,11 +104,19 @@ class BookingRead(BookingBase):
     currency: str
     subtotal: Decimal
     fees: Decimal
+    platform_fee: Decimal
+    provider_amount: Decimal
     taxes: Decimal
+    discounts: Decimal
     total: Decimal
     booking_status: BookingStatus
-    payment_status: PaymentStatus
-    
+
+    # We might not always load payments eagerly, so we make this optional or default
+    payment_status: PaymentStatus = PaymentStatus.PENDING
+
+    cancellation_reason: str | None = None
+    cancelled_at: date | None = None
+
     items: list[BookingItemRead]
     guests: list[BookingGuestRead]
 

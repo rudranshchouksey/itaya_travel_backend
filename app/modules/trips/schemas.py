@@ -24,11 +24,15 @@ class TripItemBase(BaseModel):
         if self.item_type == TripItemType.STAY:
             assert self.listing_id is not None, "Stay items must have a listing_id"
         if self.item_type == TripItemType.EXPERIENCE:
-            assert self.experience_id is not None, "Experience items must have an experience_id"
+            assert self.experience_id is not None, (
+                "Experience items must have an experience_id"
+            )
         if self.item_type != TripItemType.STAY:
             assert self.listing_id is None, "Only stay items can have a listing_id"
         if self.item_type != TripItemType.EXPERIENCE:
-            assert self.experience_id is None, "Only experience items can have an experience_id"
+            assert self.experience_id is None, (
+                "Only experience items can have an experience_id"
+            )
         return self
 
 
@@ -87,7 +91,9 @@ class TripBase(BaseModel):
     @model_validator(mode="after")
     def validate_dates(self) -> "TripBase":
         if self.start_date and self.end_date:
-            assert self.start_date <= self.end_date, "start_date cannot be after end_date"
+            assert self.start_date <= self.end_date, (
+                "start_date cannot be after end_date"
+            )
         return self
 
 
@@ -109,7 +115,9 @@ class TripUpdate(BaseModel):
     @model_validator(mode="after")
     def validate_dates(self) -> "TripUpdate":
         if self.start_date and self.end_date:
-            assert self.start_date <= self.end_date, "start_date cannot be after end_date"
+            assert self.start_date <= self.end_date, (
+                "start_date cannot be after end_date"
+            )
         return self
 
 

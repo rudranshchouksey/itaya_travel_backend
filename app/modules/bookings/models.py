@@ -22,18 +22,49 @@ from app.shared.models import BaseModel as Base
 
 class BookingStatus(str, enum.Enum):
     PENDING = "pending"
+    PAYMENT_PENDING = "payment_pending"
     CONFIRMED = "confirmed"
     CANCELLED = "cancelled"
     COMPLETED = "completed"
     FAILED = "failed"
-
-
-class PaymentStatus(str, enum.Enum):
-    PENDING = "pending"
-    AUTHORIZED = "authorized"
-    PAID = "paid"
     REFUNDED = "refunded"
-    FAILED = "failed"
+    PARTIALLY_REFUNDED = "partially_refunded"
+
+
+BOOKING_STATUS_TRANSITIONS: dict[BookingStatus, set[BookingStatus]] = {
+    BookingStatus.PENDING: {
+        BookingStatus.PAYMENT_PENDING,
+        BookingStatus.CONFIRMED,
+        BookingStatus.COMPLETED,
+        BookingStatus.CANCELLED,
+    },
+    BookingStatus.PAYMENT_PENDING: {
+        BookingStatus.CONFIRMED,
+        BookingStatus.FAILED,
+        BookingStatus.CANCELLED,
+    },
+    BookingStatus.CONFIRMED: {
+        BookingStatus.CANCELLED,
+        BookingStatus.COMPLETED,
+        BookingStatus.REFUNDED,
+        BookingStatus.PARTIALLY_REFUNDED,
+    },
+    BookingStatus.CANCELLED: {
+        BookingStatus.REFUNDED,
+        BookingStatus.PARTIALLY_REFUNDED,
+    },
+    BookingStatus.COMPLETED: {
+        BookingStatus.REFUNDED,
+        BookingStatus.PARTIALLY_REFUNDED,
+    },
+    BookingStatus.FAILED: set(),
+    BookingStatus.REFUNDED: set(),
+    BookingStatus.PARTIALLY_REFUNDED: {BookingStatus.REFUNDED},
+}
+
+
+def validate_booking_transition(current: BookingStatus, target: BookingStatus) -> bool:
+    return target in BOOKING_STATUS_TRANSITIONS.get(current, set())
 
 
 class Booking(Base):
@@ -54,25 +85,41 @@ class Booking(Base):
     )
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
-    fees: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal("0.00"))
-    taxes: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal("0.00"))
+    fees: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
+    platform_fee: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
+    provider_amount: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
+    taxes: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
+    discounts: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
 
     booking_status: Mapped[BookingStatus] = mapped_column(
-        Enum(BookingStatus, name="booking_status_enum"),
+        Enum(BookingStatus, name="booking_status_enum", create_type=False),
         default=BookingStatus.PENDING,
         nullable=False,
         index=True,
     )
-    payment_status: Mapped[PaymentStatus] = mapped_column(
-        Enum(PaymentStatus, name="payment_status_enum"),
-        default=PaymentStatus.PENDING,
-        nullable=False,
-    )
+
+    cancellation_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    cancelled_at: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Relationships
     trip = relationship("Trip", back_populates="bookings")
-    
+    payments = relationship(
+        "Payment",
+        back_populates="booking",
+        cascade="all, delete-orphan",
+    )
+
     items: Mapped[list["BookingItem"]] = relationship(
         "BookingItem",
         primaryjoin="Booking.id == BookingItem.booking_id",
@@ -94,13 +141,17 @@ class BookingItem(Base):
         ForeignKey("bookings.id", ondelete="CASCADE"), nullable=False, index=True
     )
     item_type: Mapped[TripItemType] = mapped_column(
-        Enum(TripItemType, name="trip_item_type_enum", create_type=False), nullable=False
+        Enum(TripItemType, name="trip_item_type_enum", create_type=False),
+        nullable=False,
     )
     listing_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("listings.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     experience_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("experiences.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True
     )
 
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -113,6 +164,15 @@ class BookingItem(Base):
 
     price_snapshot: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    taxes: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
+    fees: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
+    total: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2), nullable=False, default=Decimal("0.00")
+    )
 
     __table_args__ = (
         CheckConstraint(

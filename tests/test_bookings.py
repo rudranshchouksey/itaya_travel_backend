@@ -10,7 +10,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import get_password_hash
-from app.modules.bookings.models import BookingStatus, PaymentStatus
+from app.modules.bookings.models import BookingStatus
+from app.modules.destinations.models import Destination
+from app.modules.experiences.models import (
+    Experience,
+    ExperienceAvailability,
+    ExperienceStatus,
+)
+from app.modules.listings.models import (
+    Listing,
+    ListingAvailability,
+    ListingStatus,
+    PropertyType,
+)
+from app.modules.payments.models import PaymentStatus
 from app.modules.users.models import User
 
 pytestmark = pytest.mark.asyncio
@@ -40,23 +53,15 @@ async def test_user_token(async_client: AsyncClient, test_user: User) -> str:
     return res.json()["access_token"]
 
 
-from app.modules.destinations.models import Destination
-from app.modules.experiences.models import (
-    Experience,
-    ExperienceAvailability,
-    ExperienceStatus,
-)
-from app.modules.listings.models import (
-    Listing,
-    ListingAvailability,
-    ListingStatus,
-    PropertyType,
-)
-
-
-async def setup_test_data(db_session: AsyncSession, host_user: User) -> tuple[uuid.UUID, uuid.UUID]:
+async def setup_test_data(
+    db_session: AsyncSession, host_user: User
+) -> tuple[uuid.UUID, uuid.UUID]:
     # 1. Create a destination
-    dest = Destination(name="Booking Dest", slug=f"booking-dest-{uuid.uuid4().hex[:8]}", country="TC")
+    dest = Destination(
+        name="Booking Dest",
+        slug=f"booking-dest-{uuid.uuid4().hex[:8]}",
+        country="TC",
+    )
     db_session.add(dest)
     await db_session.flush()
 
@@ -115,9 +120,11 @@ async def setup_test_data(db_session: AsyncSession, host_user: User) -> tuple[uu
 
 
 async def test_successful_booking_and_payment_success(
-    async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
 ):
-    # Tests criteria 1 & 13
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -145,20 +152,57 @@ async def test_successful_booking_and_payment_success(
         ],
     }
 
-    # Use payment mock success token
+    # 1. Create booking (returns PAYMENT_PENDING)
     res = await async_client.post(
         f"{settings.API_V1_PREFIX}/bookings",
         json=booking_data,
-        headers={**headers, "X-Payment-Token": "success_token"},
+        headers=headers,
     )
     assert res.status_code == 201
     data = res.json()
-    assert data["booking_status"] == BookingStatus.CONFIRMED
-    assert data["payment_status"] == PaymentStatus.AUTHORIZED
+    booking_id = data["id"]
+    assert data["booking_status"] == BookingStatus.PAYMENT_PENDING
     assert data["total"] == "200.00"  # 2 days * 100
 
+    # 2. Create payment
+    p_res = await async_client.post(
+        f"{settings.API_V1_PREFIX}/payments/create",
+        json={"booking_id": booking_id},
+        headers=headers,
+    )
+    assert p_res.status_code == 201
+    p_data = p_res.json()
+    payment_id = p_data["payment_id"]
 
-async def test_unavailable_listing(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+    # 3. Verify payment
+    v_res = await async_client.post(
+        f"{settings.API_V1_PREFIX}/payments/{payment_id}/verify",
+        json={
+            "payment_id": str(payment_id),
+            "provider_payment_id": "pay_test123",
+            "provider_order_id": p_data["provider_order_id"],
+            "provider_signature": "sig_valid",
+        },
+        headers=headers,
+    )
+    assert v_res.status_code == 200
+    assert v_res.json()["status"] == PaymentStatus.CAPTURED
+
+    # 4. Check booking status is now confirmed
+    b_res = await async_client.get(
+        f"{settings.API_V1_PREFIX}/bookings/{booking_id}",
+        headers=headers,
+    )
+    assert b_res.status_code == 200
+    assert b_res.json()["booking_status"] == BookingStatus.CONFIRMED
+
+
+async def test_unavailable_listing(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -193,7 +237,12 @@ async def test_unavailable_listing(async_client: AsyncClient, test_user_token: s
     assert "not available" in res2.json()["error"]["message"].lower()
 
 
-async def test_invalid_dates(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_invalid_dates(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -204,7 +253,7 @@ async def test_invalid_dates(async_client: AsyncClient, test_user_token: str, db
                 "item_type": "stay",
                 "listing_id": str(listing_id),
                 "start_date": "2026-10-12",
-                "end_date": "2026-10-10", # Invalid!
+                "end_date": "2026-10-10",  # Invalid!
                 "quantity": 1,
                 "guest_count": 2,
             }
@@ -218,7 +267,12 @@ async def test_invalid_dates(async_client: AsyncClient, test_user_token: str, db
     assert res.status_code == 422
 
 
-async def test_invalid_guest_count(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_invalid_guest_count(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -234,7 +288,7 @@ async def test_invalid_guest_count(async_client: AsyncClient, test_user_token: s
                 "start_date": start_d.isoformat(),
                 "end_date": end_d.isoformat(),
                 "quantity": 1,
-                "guest_count": 10, # Exceeds capacity 4
+                "guest_count": 10,  # Exceeds capacity 4
             }
         ],
         "guests": [{"first_name": "T", "last_name": "U", "is_primary": True}],
@@ -246,7 +300,12 @@ async def test_invalid_guest_count(async_client: AsyncClient, test_user_token: s
     assert res.status_code == 422
 
 
-async def test_idempotent_request(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_idempotent_request(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -271,18 +330,27 @@ async def test_idempotent_request(async_client: AsyncClient, test_user_token: st
     headers_with_idempotency = {**headers, "Idempotency-Key": "test-key-123"}
 
     res1 = await async_client.post(
-        f"{settings.API_V1_PREFIX}/bookings", json=booking_data, headers=headers_with_idempotency
+        f"{settings.API_V1_PREFIX}/bookings",
+        json=booking_data,
+        headers=headers_with_idempotency,
     )
     assert res1.status_code == 201
-    
+
     res2 = await async_client.post(
-        f"{settings.API_V1_PREFIX}/bookings", json=booking_data, headers=headers_with_idempotency
+        f"{settings.API_V1_PREFIX}/bookings",
+        json=booking_data,
+        headers=headers_with_idempotency,
     )
     assert res2.status_code == 201
     assert res1.json()["id"] == res2.json()["id"]
 
 
-async def test_booking_cancellation_and_state(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_booking_cancellation_and_state(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -311,11 +379,13 @@ async def test_booking_cancellation_and_state(async_client: AsyncClient, test_us
     b_id = res.json()["id"]
 
     res_cancel = await async_client.post(
-        f"{settings.API_V1_PREFIX}/bookings/{b_id}/cancel", headers=headers
+        f"{settings.API_V1_PREFIX}/bookings/{b_id}/cancel",
+        json={"reason": "Change of plans"},
+        headers=headers,
     )
     assert res_cancel.status_code == 200
     assert res_cancel.json()["booking_status"] == BookingStatus.CANCELLED
-    
+
     # Try cancelling again
     res_cancel_again = await async_client.post(
         f"{settings.API_V1_PREFIX}/bookings/{b_id}/cancel", headers=headers
@@ -323,7 +393,12 @@ async def test_booking_cancellation_and_state(async_client: AsyncClient, test_us
     assert res_cancel_again.status_code == 422
 
 
-async def test_unauthorized_booking_access(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_unauthorized_booking_access(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -351,13 +426,16 @@ async def test_unauthorized_booking_access(async_client: AsyncClient, test_user_
     assert res.status_code == 201
     b_id = res.json()["id"]
 
-    # Try accessing with another user
-    # We don't have a second user token fixture easily, but we can try without token
     res_unauth = await async_client.get(f"{settings.API_V1_PREFIX}/bookings/{b_id}")
     assert res_unauth.status_code == 401
 
 
-async def test_payment_mock_failure(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_payment_mock_failure(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -382,23 +460,44 @@ async def test_payment_mock_failure(async_client: AsyncClient, test_user_token: 
     res = await async_client.post(
         f"{settings.API_V1_PREFIX}/bookings",
         json=booking_data,
-        headers={**headers, "X-Payment-Token": "fail_token"},
+        headers=headers,
     )
-    assert res.status_code == 422
-    assert "payment failed" in res.json()["error"]["message"].lower()
+    assert res.status_code == 201
+    booking_id = res.json()["id"]
 
-    # The availability should have been rolled back, so we can book again
-    res2 = await async_client.post(
-        f"{settings.API_V1_PREFIX}/bookings", json=booking_data, headers=headers
+    # Create payment
+    p_res = await async_client.post(
+        f"{settings.API_V1_PREFIX}/payments/create",
+        json={"booking_id": booking_id},
+        headers=headers,
     )
-    assert res2.status_code == 201
+    assert p_res.status_code == 201
+    payment_id = p_res.json()["payment_id"]
+
+    # Verify with failing token
+    v_res = await async_client.post(
+        f"{settings.API_V1_PREFIX}/payments/{payment_id}/verify",
+        json={
+            "payment_id": str(payment_id),
+            "provider_payment_id": "fail_token",
+            "provider_order_id": p_res.json()["provider_order_id"],
+            "provider_signature": "invalid_sig",
+        },
+        headers=headers,
+    )
+    assert v_res.status_code == 422
 
 
 @pytest.mark.skipif(
     settings.TEST_DATABASE_URL.startswith("sqlite"),
     reason="SQLite does not support the row-level locking needed for this test",
 )
-async def test_concurrent_booking_scenario(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_concurrent_booking_scenario(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -423,19 +522,28 @@ async def test_concurrent_booking_scenario(async_client: AsyncClient, test_user_
     # Make concurrent requests
     tasks = [
         async_client.post(
-            f"{settings.API_V1_PREFIX}/bookings", json=booking_data, headers=headers
-        ) for _ in range(3)
+            f"{settings.API_V1_PREFIX}/bookings",
+            json=booking_data,
+            headers=headers,
+        )
+        for _ in range(3)
     ]
-    
+
     responses = await asyncio.gather(*tasks)
-    
+
     successes = [r for r in responses if r.status_code == 201]
     failures = [r for r in responses if r.status_code == 422]
-    
-    # We should have exactly 1 success and 2 failures due to pessimistic locking in service
+
     assert len(successes) == 1
     assert len(failures) == 2
-async def test_get_user_bookings(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+
+
+async def test_get_user_bookings(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -463,14 +571,17 @@ async def test_get_user_bookings(async_client: AsyncClient, test_user_token: str
     )
 
     # Get user bookings
-    res = await async_client.get(
-        f"{settings.API_V1_PREFIX}/bookings", headers=headers
-    )
+    res = await async_client.get(f"{settings.API_V1_PREFIX}/bookings", headers=headers)
     assert res.status_code == 200
     assert len(res.json()) >= 1
 
 
-async def test_get_booking_by_id(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_get_booking_by_id(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -506,7 +617,12 @@ async def test_get_booking_by_id(async_client: AsyncClient, test_user_token: str
     assert res.json()["id"] == b_id
 
 
-async def test_successful_experience_booking(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_successful_experience_booking(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -534,7 +650,12 @@ async def test_successful_experience_booking(async_client: AsyncClient, test_use
     assert res.json()["total"] == "60.00"  # price_override was 60
 
 
-async def test_unavailable_experience(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_unavailable_experience(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -568,7 +689,12 @@ async def test_unavailable_experience(async_client: AsyncClient, test_user_token
     assert "fully booked" in res.json()["error"]["message"].lower()
 
 
-async def test_booking_multiple_items(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_booking_multiple_items(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -593,7 +719,7 @@ async def test_booking_multiple_items(async_client: AsyncClient, test_user_token
                 "start_time": "10:00:00",
                 "quantity": 1,
                 "guest_count": 2,
-            }
+            },
         ],
         "guests": [{"first_name": "T", "last_name": "U", "is_primary": True}],
     }

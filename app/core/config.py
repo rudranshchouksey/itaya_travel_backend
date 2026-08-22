@@ -11,6 +11,16 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
+    # Payment provider: "razorpay" or "mock"
+    PAYMENT_PROVIDER: str = "mock"
+    RAZORPAY_KEY_ID: str = ""
+    RAZORPAY_KEY_SECRET: str = ""
+    RAZORPAY_WEBHOOK_SECRET: str = ""
+
+    # Platform financials
+    PLATFORM_COMMISSION_RATE: float = 0.15  # 15%
+    DEFAULT_CURRENCY: str = "INR"
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )

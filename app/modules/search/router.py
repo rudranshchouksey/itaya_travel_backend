@@ -6,6 +6,7 @@ from app.modules.search.service import search_service
 
 router = APIRouter(tags=["Search"])
 
+
 @router.get(
     "/search",
     response_model=SearchResponse,

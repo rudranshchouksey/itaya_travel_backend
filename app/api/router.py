@@ -7,6 +7,7 @@ from app.modules.bookings.router import router as bookings_router
 from app.modules.destinations.router import router as destinations_router
 from app.modules.experiences.router import router as experiences_router
 from app.modules.listings.router import router as listings_router
+from app.modules.payments.router import router as payments_router
 from app.modules.recommendations.router import router as recommendations_router
 from app.modules.reviews.router import router as reviews_router
 from app.modules.search.router import router as search_router
@@ -27,6 +28,7 @@ api_router.include_router(
 )
 api_router.include_router(trips_router, prefix="/trips", tags=["Trips"])
 api_router.include_router(bookings_router, prefix="/bookings", tags=["Bookings"])
+api_router.include_router(payments_router, prefix="/payments", tags=["Payments"])
 api_router.include_router(reviews_router)
 api_router.include_router(search_router)
 api_router.include_router(recommendations_router)

@@ -10,6 +10,7 @@ from app.modules.ai.service import ai_service
 
 router = APIRouter(tags=["AI Planner"])
 
+
 @router.post(
     "/ai/trips/plan",
     response_model=AITripPlanResponse,
@@ -23,6 +24,7 @@ async def plan_trip(
     Analyzes intent and proposes a structured trip itinerary based on real Itvaya inventory.
     """
     return await ai_service.plan_trip(session, request)
+
 
 @router.post(
     "/ai/trips/optimize",

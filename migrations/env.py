@@ -18,6 +18,9 @@ from app.modules.listings.models import (  # noqa
     ListingAvailability,
     ListingImage,
 )
+from app.modules.payments.models import *  # noqa
+from app.modules.reviews.models import *  # noqa
+from app.modules.trips.models import *  # noqa
 from app.modules.users.models import User, UserRole  # noqa
 from app.shared.models import Base
 

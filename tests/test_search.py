@@ -16,7 +16,9 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest_asyncio.fixture
-async def setup_search_data(db_session: AsyncSession) -> tuple[Destination, Destination]:
+async def setup_search_data(
+    db_session: AsyncSession,
+) -> tuple[Destination, Destination]:
     user = User(
         email=f"searchhost_{uuid.uuid4().hex[:8]}@itvaya.com",
         password_hash="hash",
@@ -28,7 +30,9 @@ async def setup_search_data(db_session: AsyncSession) -> tuple[Destination, Dest
     await db_session.flush()
 
     dest1 = Destination(name="Bali", slug=f"bali-{uuid.uuid4().hex[:8]}", country="ID")
-    dest2 = Destination(name="Tokyo", slug=f"tokyo-{uuid.uuid4().hex[:8]}", country="JP")
+    dest2 = Destination(
+        name="Tokyo", slug=f"tokyo-{uuid.uuid4().hex[:8]}", country="JP"
+    )
     db_session.add_all([dest1, dest2])
     await db_session.flush()
 
@@ -75,13 +79,15 @@ async def setup_search_data(db_session: AsyncSession) -> tuple[Destination, Dest
         status=ExperienceStatus.PUBLISHED,
     )
     db_session.add_all([exp1, exp2])
-    
+
     await db_session.commit()
     return dest1, dest2
 
 
 async def test_keyword_search(async_client: AsyncClient, setup_search_data):
-    res = await async_client.get(f"{settings.API_V1_PREFIX}/search", params={"query": "Sushi"})
+    res = await async_client.get(
+        f"{settings.API_V1_PREFIX}/search", params={"query": "Sushi"}
+    )
     assert res.status_code == 200
     results = res.json()["results"]
     assert len(results) > 0
@@ -90,7 +96,9 @@ async def test_keyword_search(async_client: AsyncClient, setup_search_data):
 
 async def test_destination_filter(async_client: AsyncClient, setup_search_data):
     dest1, dest2 = setup_search_data
-    res = await async_client.get(f"{settings.API_V1_PREFIX}/search", params={"destination_id": str(dest1.id)})
+    res = await async_client.get(
+        f"{settings.API_V1_PREFIX}/search", params={"destination_id": str(dest1.id)}
+    )
     assert res.status_code == 200
     results = res.json()["results"]
     # Should only return Bali items
@@ -101,7 +109,10 @@ async def test_destination_filter(async_client: AsyncClient, setup_search_data):
 
 async def test_price_filter(async_client: AsyncClient, setup_search_data):
     # Search experiences for price filter
-    res = await async_client.get(f"{settings.API_V1_PREFIX}/search", params={"type": "experience", "min_price": 100})
+    res = await async_client.get(
+        f"{settings.API_V1_PREFIX}/search",
+        params={"type": "experience", "min_price": 100},
+    )
     assert res.status_code == 200
     results = res.json()["results"]
     assert len(results) > 0
@@ -110,26 +121,37 @@ async def test_price_filter(async_client: AsyncClient, setup_search_data):
 
 
 async def test_pagination(async_client: AsyncClient, setup_search_data):
-    res = await async_client.get(f"{settings.API_V1_PREFIX}/search", params={"limit": 1})
+    res = await async_client.get(
+        f"{settings.API_V1_PREFIX}/search", params={"limit": 1}
+    )
     assert res.status_code == 200
     results = res.json()["results"]
     assert len(results) <= 2  # limit 1 per type = max 2
 
 
 async def test_sorting(async_client: AsyncClient, setup_search_data):
-    res = await async_client.get(f"{settings.API_V1_PREFIX}/search", params={"type": "experience", "sort_by": "price_desc"})
+    res = await async_client.get(
+        f"{settings.API_V1_PREFIX}/search",
+        params={"type": "experience", "sort_by": "price_desc"},
+    )
     assert res.status_code == 200
     results = res.json()["results"]
     assert len(results) >= 2
-    assert float(results[0]["data"]["base_price"]) >= float(results[1]["data"]["base_price"])
+    assert float(results[0]["data"]["base_price"]) >= float(
+        results[1]["data"]["base_price"]
+    )
 
 
 async def test_empty_results(async_client: AsyncClient, setup_search_data):
-    res = await async_client.get(f"{settings.API_V1_PREFIX}/search", params={"query": "nonexistentxyz123"})
+    res = await async_client.get(
+        f"{settings.API_V1_PREFIX}/search", params={"query": "nonexistentxyz123"}
+    )
     assert res.status_code == 200
     assert res.json()["total_count"] == 0
 
 
 async def test_invalid_parameters(async_client: AsyncClient, setup_search_data):
-    res = await async_client.get(f"{settings.API_V1_PREFIX}/search", params={"limit": -5})
+    res = await async_client.get(
+        f"{settings.API_V1_PREFIX}/search", params={"limit": -5}
+    )
     assert res.status_code == 422

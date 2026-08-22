@@ -37,12 +37,14 @@ class Review(Base):
     rating: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str | None] = mapped_column(String(100), nullable=True)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
-    
+
     # Store images as JSON array
     images: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
 
     __table_args__ = (
-        UniqueConstraint("user_id", "booking_item_id", name="uq_user_booking_item_review"),
+        UniqueConstraint(
+            "user_id", "booking_item_id", name="uq_user_booking_item_review"
+        ),
         CheckConstraint("rating >= 1 AND rating <= 5", name="check_valid_rating"),
         CheckConstraint(
             "(listing_id IS NOT NULL AND experience_id IS NULL) OR (listing_id IS NULL AND experience_id IS NOT NULL)",

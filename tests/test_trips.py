@@ -115,13 +115,18 @@ async def sample_trip(
     db_session.add(item1)
 
     await db_session.commit()
-    
+
     # Reload with relationships eager-loaded to avoid MissingGreenlet
     from sqlalchemy.orm import selectinload
-    stmt = select(Trip).options(
-        selectinload(Trip.days).selectinload(TripDay.items),
-        selectinload(Trip.items)
-    ).where(Trip.id == trip.id)
+
+    stmt = (
+        select(Trip)
+        .options(
+            selectinload(Trip.days).selectinload(TripDay.items),
+            selectinload(Trip.items),
+        )
+        .where(Trip.id == trip.id)
+    )
     trip = (await db_session.execute(stmt)).scalars().first()
     return trip
 
@@ -335,8 +340,6 @@ async def test_transaction_rollback(
         f"{settings.API_V1_PREFIX}/auth/login", data=login_data
     )
     token = res.json()["access_token"]
-
-    day = sample_trip.days[0]
 
     # 14. Transaction rollback behavior
     # We deliberately trigger a DB-level error by providing an invalid UUID (which FastAPI normally catches, but we will test it via a 422)

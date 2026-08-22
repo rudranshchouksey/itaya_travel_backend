@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Header, status
 from app.api.deps import SessionDep, get_current_active_user
 from app.modules.bookings.schemas import BookingCreate, BookingRead
 from app.modules.bookings.service import BookingService
+from app.modules.payments.schemas import CancellationRequest
 from app.modules.users.models import User
 
 router = APIRouter(tags=["Bookings"])
@@ -22,19 +23,16 @@ async def create_booking(
     session: SessionDep,
     current_user: Annotated[User, Depends(get_current_active_user)],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
-    payment_token: Annotated[str | None, Header(alias="X-Payment-Token")] = None,
 ):
     """
     Create a new booking for a stay or an experience.
     Pass an `Idempotency-Key` header to safely retry requests without double-booking.
-    Pass an `X-Payment-Token` header for payment processing.
     """
     return await BookingService.create_booking(
         session=session,
         user_id=current_user.id,
         booking_in=booking_in,
         idempotency_key=idempotency_key,
-        payment_token=payment_token,
     )
 
 
@@ -78,8 +76,15 @@ async def cancel_booking(
     booking_id: uuid.UUID,
     session: SessionDep,
     current_user: Annotated[User, Depends(get_current_active_user)],
+    cancellation_in: CancellationRequest | None = None,
 ):
     """
     Cancel a booking and free up the associated availability.
     """
-    return await BookingService.cancel_booking(session, booking_id, current_user.id)
+    reason = cancellation_in.reason if cancellation_in else None
+    return await BookingService.cancel_booking(
+        session=session,
+        booking_id=booking_id,
+        user_id=current_user.id,
+        reason=reason,
+    )

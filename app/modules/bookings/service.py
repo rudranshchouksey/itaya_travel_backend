@@ -1,11 +1,13 @@
 import secrets
 import uuid
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.core.exceptions import (
     NotFoundError,
     PermissionDeniedError,
@@ -16,12 +18,13 @@ from app.modules.bookings.models import (
     BookingGuest,
     BookingItem,
     BookingStatus,
-    PaymentStatus,
+    validate_booking_transition,
 )
-from app.modules.bookings.payment import PaymentFailedError, payment_gateway
 from app.modules.bookings.schemas import BookingCreate
 from app.modules.experiences.models import Experience, ExperienceAvailability
 from app.modules.listings.models import Listing, ListingAvailability
+from app.modules.payments.models import PaymentStatus
+from app.modules.payments.service import PaymentService
 from app.modules.trips.models import TripItemType
 
 
@@ -32,13 +35,16 @@ class BookingService:
         user_id: uuid.UUID,
         booking_in: BookingCreate,
         idempotency_key: str | None = None,
-        payment_token: str | None = None,
     ) -> Booking:
         # Check idempotency
         if idempotency_key:
             stmt = (
                 select(Booking)
-                .options(selectinload(Booking.items), selectinload(Booking.guests))
+                .options(
+                    selectinload(Booking.items),
+                    selectinload(Booking.guests),
+                    selectinload(Booking.payments),
+                )
                 .where(Booking.idempotency_key == idempotency_key)
                 .where(Booking.user_id == user_id)
             )
@@ -47,7 +53,7 @@ class BookingService:
                 return existing
 
         reference = f"BKG-{secrets.token_hex(4).upper()}"
-        
+
         booking_db = Booking(
             user_id=user_id,
             trip_id=booking_in.trip_id,
@@ -56,10 +62,12 @@ class BookingService:
             currency=booking_in.currency,
             subtotal=Decimal("0.00"),
             fees=Decimal("0.00"),
+            platform_fee=Decimal("0.00"),
+            provider_amount=Decimal("0.00"),
             taxes=Decimal("0.00"),
+            discounts=Decimal("0.00"),
             total=Decimal("0.00"),
-            booking_status=BookingStatus.PENDING,
-            payment_status=PaymentStatus.PENDING,
+            booking_status=BookingStatus.PAYMENT_PENDING,
         )
 
         for guest_in in booking_in.guests:
@@ -83,6 +91,8 @@ class BookingService:
                 end_time=item_in.end_time,
                 quantity=item_in.quantity,
                 guest_count=item_in.guest_count,
+                taxes=Decimal("0.00"),
+                fees=Decimal("0.00"),
             )
 
             if item_in.item_type == TripItemType.STAY:
@@ -95,6 +105,8 @@ class BookingService:
                 if listing.guest_capacity < item_in.guest_count:
                     raise ValidationError("Guest count exceeds listing capacity")
 
+                item_db.provider_id = listing.host_id
+
                 # Lock availabilities
                 avail_stmt = (
                     select(ListingAvailability)
@@ -104,12 +116,12 @@ class BookingService:
                     .with_for_update()
                 )
                 availabilities = (await session.execute(avail_stmt)).scalars().all()
-                
+
                 # Check if all dates are available
                 num_days = (item_in.end_date - item_in.start_date).days
                 if len(availabilities) != num_days:
                     raise ValidationError("Not all dates are available or configured")
-                
+
                 total_price = Decimal("0.00")
                 for avail in availabilities:
                     if not avail.is_available:
@@ -120,6 +132,7 @@ class BookingService:
 
                 item_db.price_snapshot = total_price
                 item_db.subtotal = total_price * item_in.quantity
+                item_db.total = item_db.subtotal + item_db.fees + item_db.taxes
 
             elif item_in.item_type == TripItemType.EXPERIENCE:
                 stmt = select(Experience).where(Experience.id == item_in.experience_id)
@@ -130,89 +143,103 @@ class BookingService:
                 if exp.guest_capacity < item_in.guest_count:
                     raise ValidationError("Guest count exceeds experience capacity")
 
+                item_db.provider_id = exp.provider_id
+
                 avail_stmt = (
                     select(ExperienceAvailability)
-                    .where(ExperienceAvailability.experience_id == item_in.experience_id)
+                    .where(
+                        ExperienceAvailability.experience_id == item_in.experience_id
+                    )
                     .where(ExperienceAvailability.date == item_in.start_date)
                     .where(ExperienceAvailability.start_time == item_in.start_time)
                     .with_for_update()
                 )
                 avail = (await session.execute(avail_stmt)).scalar_one_or_none()
                 if not avail:
-                    raise ValidationError("Experience availability not found for this time")
-                
+                    raise ValidationError(
+                        "Experience availability not found for this time"
+                    )
+
                 if not avail.is_available:
                     raise ValidationError("Experience is fully booked for this time")
 
-                price = avail.price_override if avail.price_override is not None else exp.base_price
+                price = (
+                    avail.price_override
+                    if avail.price_override is not None
+                    else exp.base_price
+                )
                 item_db.price_snapshot = price
                 item_db.subtotal = price * item_in.quantity
-                
-                # In a real app we might track remaining capacity, but here it's boolean
+                item_db.total = item_db.subtotal + item_db.fees + item_db.taxes
+
                 avail.is_available = False
 
             booking_db.items.append(item_db)
             booking_db.subtotal += item_db.subtotal
 
-        # Set totals
-        # In a real app we'd calculate fees/taxes
-        booking_db.total = booking_db.subtotal + booking_db.fees + booking_db.taxes
+        # Set totals and platform commission
+        commission_rate = Decimal(str(settings.PLATFORM_COMMISSION_RATE))
+        booking_db.platform_fee = (booking_db.subtotal * commission_rate).quantize(
+            Decimal("0.01")
+        )
+        booking_db.total = (
+            booking_db.subtotal
+            + booking_db.fees
+            + booking_db.taxes
+            - booking_db.discounts
+        )
+        booking_db.provider_amount = booking_db.total - booking_db.platform_fee
 
         session.add(booking_db)
-        await session.flush() # flush to get booking_db.id
-
-        # Process Payment
-        if payment_token:
-            try:
-                # authorize payment
-                await payment_gateway.authorize(
-                    amount=booking_db.total,
-                    currency=booking_db.currency,
-                    token=payment_token,
-                    reference=booking_db.reference,
-                )
-                booking_db.payment_status = PaymentStatus.AUTHORIZED
-                booking_db.booking_status = BookingStatus.CONFIRMED
-            except PaymentFailedError as e:
-                # Depending on requirement, we can either save the booking as FAILED or raise error
-                # and rollback. The requirement says: "Payment mock failure". Let's raise error
-                # so the transaction rolls back the availability locks.
-                raise ValidationError("Payment failed: " + str(e))
-                
-        else:
-            # For tests where payment is deferred or handled outside
-            pass
-
         await session.commit()
+
         stmt = (
             select(Booking)
-            .options(selectinload(Booking.items), selectinload(Booking.guests))
+            .options(
+                selectinload(Booking.items),
+                selectinload(Booking.guests),
+                selectinload(Booking.payments),
+            )
             .where(Booking.id == booking_db.id)
         )
         return (await session.execute(stmt)).scalar_one()
 
     @staticmethod
-    async def get_booking(session: AsyncSession, booking_id: uuid.UUID, user_id: uuid.UUID) -> Booking:
+    async def get_booking(
+        session: AsyncSession, booking_id: uuid.UUID, user_id: uuid.UUID
+    ) -> Booking:
         stmt = (
             select(Booking)
-            .options(selectinload(Booking.items), selectinload(Booking.guests))
+            .options(
+                selectinload(Booking.items),
+                selectinload(Booking.guests),
+                selectinload(Booking.payments),
+            )
             .where(Booking.id == booking_id)
         )
         booking = (await session.execute(stmt)).scalar_one_or_none()
-        
+
         if not booking:
             raise NotFoundError("Booking not found")
-            
+
         if booking.user_id != user_id:
-            raise PermissionDeniedError("You do not have permission to view this booking")
-            
+            raise PermissionDeniedError(
+                "You do not have permission to view this booking"
+            )
+
         return booking
 
     @staticmethod
-    async def get_user_bookings(session: AsyncSession, user_id: uuid.UUID) -> list[Booking]:
+    async def get_user_bookings(
+        session: AsyncSession, user_id: uuid.UUID
+    ) -> list[Booking]:
         stmt = (
             select(Booking)
-            .options(selectinload(Booking.items), selectinload(Booking.guests))
+            .options(
+                selectinload(Booking.items),
+                selectinload(Booking.guests),
+                selectinload(Booking.payments),
+            )
             .where(Booking.user_id == user_id)
             .order_by(Booking.created_at.desc())
         )
@@ -220,17 +247,58 @@ class BookingService:
         return list(result.scalars().all())
 
     @staticmethod
-    async def cancel_booking(session: AsyncSession, booking_id: uuid.UUID, user_id: uuid.UUID) -> Booking:
+    async def cancel_booking(
+        session: AsyncSession,
+        booking_id: uuid.UUID,
+        user_id: uuid.UUID,
+        reason: str | None = None,
+    ) -> Booking:
         booking = await BookingService.get_booking(session, booking_id, user_id)
-        
-        if booking.booking_status in [BookingStatus.CANCELLED, BookingStatus.COMPLETED]:
-            raise ValidationError(f"Cannot cancel a booking in {booking.booking_status} state")
 
+        if not validate_booking_transition(
+            booking.booking_status, BookingStatus.CANCELLED
+        ):
+            raise ValidationError(
+                f"Cannot cancel a booking in {booking.booking_status} state"
+            )
+
+        was_confirmed = booking.booking_status == BookingStatus.CONFIRMED
         booking.booking_status = BookingStatus.CANCELLED
-        
-        if booking.payment_status in [PaymentStatus.AUTHORIZED, PaymentStatus.PAID]:
-            # Simulate refund
-            booking.payment_status = PaymentStatus.REFUNDED
+        booking.cancellation_reason = reason
+        booking.cancelled_at = date.today()
+
+        # Check if there is a captured payment to refund based on cancellation policy
+        if was_confirmed and booking.payments:
+            captured_payments = [
+                p for p in booking.payments if p.status == PaymentStatus.CAPTURED
+            ]
+            if captured_payments:
+                payment = captured_payments[0]
+                # Cancellation policy:
+                # Earliest checkin date
+                start_dates = [
+                    item.start_date for item in booking.items if item.start_date
+                ]
+                today = date.today()
+                refund_pct = Decimal("1.0")  # Default full refund
+                if start_dates:
+                    earliest_date = min(start_dates)
+                    days_diff = (earliest_date - today).days
+                    if days_diff >= 2:
+                        refund_pct = Decimal("1.0")  # 100% refund
+                    elif days_diff >= 1:
+                        refund_pct = Decimal("0.5")  # 50% refund
+                    else:
+                        refund_pct = Decimal("0.0")  # No refund
+
+                refund_amount = (payment.amount * refund_pct).quantize(Decimal("0.01"))
+                if refund_amount > Decimal("0.00"):
+                    await PaymentService.create_refund(
+                        session=session,
+                        payment_id=payment.id,
+                        amount=refund_amount,
+                        reason=reason or "Booking cancelled",
+                    )
 
         # Free up availability
         for item in booking.items:
@@ -244,7 +312,7 @@ class BookingService:
                 availabilities = (await session.execute(avail_stmt)).scalars().all()
                 for avail in availabilities:
                     avail.is_available = True
-                    
+
             elif item.item_type == TripItemType.EXPERIENCE:
                 avail_stmt = (
                     select(ExperienceAvailability)
@@ -258,9 +326,14 @@ class BookingService:
 
         session.add(booking)
         await session.commit()
+
         stmt = (
             select(Booking)
-            .options(selectinload(Booking.items), selectinload(Booking.guests))
+            .options(
+                selectinload(Booking.items),
+                selectinload(Booking.guests),
+                selectinload(Booking.payments),
+            )
             .where(Booking.id == booking.id)
         )
         return (await session.execute(stmt)).scalar_one()
