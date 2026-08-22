@@ -1,6 +1,5 @@
-import uuid
 import secrets
-from datetime import timedelta
+import uuid
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -9,8 +8,8 @@ from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import (
     NotFoundError,
-    ValidationError,
     PermissionDeniedError,
+    ValidationError,
 )
 from app.modules.bookings.models import (
     Booking,
@@ -19,11 +18,11 @@ from app.modules.bookings.models import (
     BookingStatus,
     PaymentStatus,
 )
+from app.modules.bookings.payment import PaymentFailedError, payment_gateway
 from app.modules.bookings.schemas import BookingCreate
-from app.modules.bookings.payment import payment_gateway, PaymentFailedError
-from app.modules.trips.models import TripItemType
-from app.modules.listings.models import Listing, ListingAvailability
 from app.modules.experiences.models import Experience, ExperienceAvailability
+from app.modules.listings.models import Listing, ListingAvailability
+from app.modules.trips.models import TripItemType
 
 
 class BookingService:

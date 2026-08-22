@@ -152,3 +152,10 @@ class Listing(BaseModel):
         secondaryjoin="Amenity.id == ListingAmenity.amenity_id",
         viewonly=True,
     )
+
+    reviews = relationship(
+        "Review",
+        primaryjoin="Listing.id == Review.listing_id",
+        cascade="all, delete-orphan",
+        back_populates="listing",
+    )

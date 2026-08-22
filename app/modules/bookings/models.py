@@ -131,6 +131,7 @@ class BookingItem(Base):
     )
     listing = relationship("Listing")
     experience = relationship("Experience")
+    review = relationship("Review", back_populates="booking_item", uselist=False)
 
 
 class BookingGuest(Base):

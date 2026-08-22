@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, status
 
-from app.api.deps import get_current_active_user, SessionDep
+from app.api.deps import SessionDep, get_current_active_user
 from app.modules.bookings.schemas import BookingCreate, BookingRead
 from app.modules.bookings.service import BookingService
 from app.modules.users.models import User

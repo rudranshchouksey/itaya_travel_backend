@@ -4,7 +4,6 @@ from typing import Protocol
 
 class PaymentFailedError(Exception):
     """Raised when a payment fails during processing."""
-    pass
 
 
 class PaymentGateway(Protocol):

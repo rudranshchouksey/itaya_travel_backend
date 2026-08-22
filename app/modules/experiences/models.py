@@ -146,3 +146,10 @@ class Experience(BaseModel):
         secondaryjoin="ExperienceCategory.id == ExperienceCategoryLink.category_id",
         viewonly=True,
     )
+
+    reviews = relationship(
+        "Review",
+        primaryjoin="Experience.id == Review.experience_id",
+        cascade="all, delete-orphan",
+        back_populates="experience",
+    )

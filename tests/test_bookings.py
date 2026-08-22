@@ -1,19 +1,17 @@
 import asyncio
 import uuid
-from datetime import date, timedelta, time
+from datetime import date, time, timedelta
 from decimal import Decimal
 
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
-
-from app.core.config import settings
-from app.modules.bookings.models import BookingStatus, PaymentStatus
-from app.modules.trips.models import TripItemType
-from app.modules.users.models import User
-from app.core.security import get_password_hash
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.core.security import get_password_hash
+from app.modules.bookings.models import BookingStatus, PaymentStatus
+from app.modules.users.models import User
 
 pytestmark = pytest.mark.asyncio
 
@@ -43,8 +41,17 @@ async def test_user_token(async_client: AsyncClient, test_user: User) -> str:
 
 
 from app.modules.destinations.models import Destination
-from app.modules.listings.models import Listing, ListingAvailability, PropertyType, ListingStatus
-from app.modules.experiences.models import Experience, ExperienceAvailability, ExperienceStatus
+from app.modules.experiences.models import (
+    Experience,
+    ExperienceAvailability,
+    ExperienceStatus,
+)
+from app.modules.listings.models import (
+    Listing,
+    ListingAvailability,
+    ListingStatus,
+    PropertyType,
+)
 
 
 async def setup_test_data(db_session: AsyncSession, host_user: User) -> tuple[uuid.UUID, uuid.UUID]:
