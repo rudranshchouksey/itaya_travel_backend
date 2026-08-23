@@ -96,21 +96,3 @@ class MockPaymentProvider:
         secret = settings.RAZORPAY_WEBHOOK_SECRET.encode("utf-8")
         expected = hmac.new(secret, body, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)
-
-
-def get_payment_provider() -> Any:
-    """Factory to return the appropriate payment provider."""
-    if settings.PAYMENT_PROVIDER.lower() == "razorpay":
-        from app.modules.payments.razorpay_provider import RazorpayPaymentProvider
-
-        return RazorpayPaymentProvider()
-    elif settings.PAYMENT_PROVIDER.lower() == "stripe":
-        from app.modules.payments.stripe_provider import StripePaymentProvider
-
-        return StripePaymentProvider()
-    else:
-        return MockPaymentProvider()
-
-
-# Global provider instance
-payment_provider = get_payment_provider()

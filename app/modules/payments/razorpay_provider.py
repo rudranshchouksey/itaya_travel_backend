@@ -29,6 +29,7 @@ class RazorpayPaymentProvider:
                 "razorpay SDK is required. Install with: pip install razorpay"
             )
 
+    @with_backoff(retryable_exceptions=(TransientRetryError,))
     async def create_order(
         self,
         amount: int,
@@ -43,9 +44,14 @@ class RazorpayPaymentProvider:
         }
         if notes:
             data["notes"] = notes
-        # razorpay SDK is synchronous; wrap if needed in production
-        order = self._client.order.create(data=data)
-        return dict(order)
+        
+        import razorpay.errors
+        try:
+            # razorpay SDK is synchronous; wrap if needed in production
+            order = self._client.order.create(data=data)
+            return dict(order)
+        except (razorpay.errors.ServerError, razorpay.errors.GatewayError) as e:
+            raise TransientRetryError(str(e)) from e
 
     async def verify_payment(
         self,
@@ -65,32 +71,47 @@ class RazorpayPaymentProvider:
         except Exception:
             return False
 
+    @with_backoff(retryable_exceptions=(TransientRetryError,))
     async def capture_payment(
         self,
         payment_id: str,
         amount: int,
     ) -> dict[str, Any]:
-        result = self._client.payment.capture(payment_id, amount)
-        return dict(result)
+        import razorpay.errors
+        try:
+            result = self._client.payment.capture(payment_id, amount)
+            return dict(result)
+        except (razorpay.errors.ServerError, razorpay.errors.GatewayError) as e:
+            raise TransientRetryError(str(e)) from e
 
+    @with_backoff(retryable_exceptions=(TransientRetryError,))
     async def fetch_payment(
         self,
         payment_id: str,
     ) -> dict[str, Any]:
-        result = self._client.payment.fetch(payment_id)
-        return dict(result)
+        import razorpay.errors
+        try:
+            result = self._client.payment.fetch(payment_id)
+            return dict(result)
+        except (razorpay.errors.ServerError, razorpay.errors.GatewayError) as e:
+            raise TransientRetryError(str(e)) from e
 
+    @with_backoff(retryable_exceptions=(TransientRetryError,))
     async def refund_payment(
         self,
         payment_id: str,
         amount: int,
         notes: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        import razorpay.errors
         data: dict[str, Any] = {"amount": amount}
         if notes:
             data["notes"] = notes
-        result = self._client.payment.refund(payment_id, amount, data)
-        return dict(result)
+        try:
+            result = self._client.payment.refund(payment_id, amount, data)
+            return dict(result)
+        except (razorpay.errors.ServerError, razorpay.errors.GatewayError) as e:
+            raise TransientRetryError(str(e)) from e
 
     def verify_webhook_signature(
         self,

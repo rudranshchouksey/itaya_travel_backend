@@ -21,7 +21,7 @@ from app.modules.payments.currency import (
     get_currency_rate_provider,
     resolve_display_currency,
 )
-from app.modules.payments.mock_provider import payment_provider
+from app.modules.payments.provider import get_payment_provider
 from app.modules.payments.models import (
     Payment,
     PaymentStatus,
@@ -34,6 +34,9 @@ from app.modules.payments.models import (
     validate_payment_transition,
 )
 from app.modules.payments.schemas import PaymentCreateResponse
+
+# Global provider instance for the service layer
+payment_provider = get_payment_provider()
 
 
 class FinancialService:
@@ -154,6 +157,8 @@ class PaymentService:
                         amount=existing_payment.amount,
                         currency=existing_payment.currency,
                         key_id=settings.RAZORPAY_KEY_ID or "mock_key_id",
+                        client_secret=None, # In a real system, you might want to fetch it again or store it.
+                        publishable_key=settings.STRIPE_PUBLISHABLE_KEY if settings.PAYMENT_PROVIDER == "stripe" else None,
                     )
 
         stmt = (
@@ -245,6 +250,8 @@ class PaymentService:
             amount=payment.amount,
             currency=payment.currency,
             key_id=settings.RAZORPAY_KEY_ID or "mock_key_id",
+            client_secret=order_data.get("client_secret"),
+            publishable_key=settings.STRIPE_PUBLISHABLE_KEY if settings.PAYMENT_PROVIDER == "stripe" else None,
         )
 
     @staticmethod

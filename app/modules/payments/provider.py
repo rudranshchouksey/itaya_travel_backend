@@ -77,3 +77,20 @@ def amount_to_smallest_unit(amount: Decimal, currency: str) -> int:
 def amount_from_smallest_unit(amount_minor: int, currency: str) -> Decimal:
     """Convert from smallest currency unit back to Decimal."""
     return Decimal(amount_minor) / Decimal(100)
+
+
+def get_payment_provider() -> Any:
+    """Factory to return the appropriate payment provider."""
+    from app.core.config import settings
+    
+    if settings.PAYMENT_PROVIDER.lower() == "razorpay":
+        from app.modules.payments.razorpay_provider import RazorpayPaymentProvider
+
+        return RazorpayPaymentProvider()
+    elif settings.PAYMENT_PROVIDER.lower() == "stripe":
+        from app.modules.payments.stripe_provider import StripePaymentProvider
+
+        return StripePaymentProvider()
+    else:
+        from app.modules.payments.mock_provider import MockPaymentProvider
+        return MockPaymentProvider()

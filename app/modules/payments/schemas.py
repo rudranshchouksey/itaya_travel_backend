@@ -19,6 +19,8 @@ class PaymentCreateResponse(BaseModel):
     amount: Decimal
     currency: str
     key_id: str
+    client_secret: str | None = None
+    publishable_key: str | None = None
 
 
 class PaymentVerifyRequest(BaseModel):
