@@ -29,11 +29,11 @@ class TripStatus(str, enum.Enum):
 
 
 class TripItemType(str, enum.Enum):
-    STAY = "stay"
-    EXPERIENCE = "experience"
-    TRANSPORT = "transport"
-    ACTIVITY = "activity"
-    CUSTOM = "custom"
+    STAY = "STAY"
+    EXPERIENCE = "EXPERIENCE"
+    TRANSPORT = "TRANSPORT"
+    ACTIVITY = "ACTIVITY"
+    CUSTOM = "CUSTOM"
 
 
 class TripParticipantRole(str, enum.Enum):
@@ -187,11 +187,11 @@ class TripItem(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "(item_type = 'stay' AND listing_id IS NOT NULL) OR (item_type != 'stay')",
+            "(item_type = 'STAY' AND listing_id IS NOT NULL) OR (item_type != 'STAY')",
             name="check_stay_listing",
         ),
         CheckConstraint(
-            "(item_type = 'experience' AND experience_id IS NOT NULL) OR (item_type != 'experience')",
+            "(item_type = 'EXPERIENCE' AND experience_id IS NOT NULL) OR (item_type != 'EXPERIENCE')",
             name="check_experience_ref",
         ),
     )

@@ -177,9 +177,7 @@ class BookingItem(Base):
     __table_args__ = (
         CheckConstraint(
             "(item_type = 'STAY' AND listing_id IS NOT NULL AND start_date IS NOT NULL AND end_date IS NOT NULL) OR "
-            "(item_type = 'EXPERIENCE' AND experience_id IS NOT NULL AND start_date IS NOT NULL AND start_time IS NOT NULL) OR "
-            "(item_type = 'stay' AND listing_id IS NOT NULL AND start_date IS NOT NULL AND end_date IS NOT NULL) OR "
-            "(item_type = 'experience' AND experience_id IS NOT NULL AND start_date IS NOT NULL AND start_time IS NOT NULL)",
+            "(item_type = 'EXPERIENCE' AND experience_id IS NOT NULL AND start_date IS NOT NULL AND start_time IS NOT NULL)",
             name="check_booking_item_references",
         ),
     )
