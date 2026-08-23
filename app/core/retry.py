@@ -1,8 +1,9 @@
 import asyncio
 import logging
 import random
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 from app.core.config import settings
 
@@ -13,6 +14,7 @@ T = TypeVar("T")
 
 class TransientRetryError(Exception):
     """Exception raised when a transient error occurs that should be retried."""
+
     pass
 
 

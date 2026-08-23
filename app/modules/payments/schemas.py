@@ -10,6 +10,7 @@ from app.modules.payments.models import PaymentStatus, RefundStatus
 class PaymentCreateRequest(BaseModel):
     booking_id: uuid.UUID
     idempotency_key: str | None = None
+    user_currency: str | None = None
 
 
 class PaymentCreateResponse(BaseModel):

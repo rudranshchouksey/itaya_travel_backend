@@ -1,4 +1,9 @@
-async def test_get_user_bookings(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_get_user_bookings(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -26,14 +31,17 @@ async def test_get_user_bookings(async_client: AsyncClient, test_user_token: str
     )
 
     # Get user bookings
-    res = await async_client.get(
-        f"{settings.API_V1_PREFIX}/bookings", headers=headers
-    )
+    res = await async_client.get(f"{settings.API_V1_PREFIX}/bookings", headers=headers)
     assert res.status_code == 200
     assert len(res.json()) >= 1
 
 
-async def test_get_booking_by_id(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_get_booking_by_id(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -69,7 +77,12 @@ async def test_get_booking_by_id(async_client: AsyncClient, test_user_token: str
     assert res.json()["id"] == b_id
 
 
-async def test_successful_experience_booking(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_successful_experience_booking(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -97,7 +110,12 @@ async def test_successful_experience_booking(async_client: AsyncClient, test_use
     assert res.json()["total"] == "60.00"  # price_override was 60
 
 
-async def test_unavailable_experience(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_unavailable_experience(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -131,7 +149,12 @@ async def test_unavailable_experience(async_client: AsyncClient, test_user_token
     assert "fully booked" in res.json()["error"]["message"].lower()
 
 
-async def test_booking_multiple_items(async_client: AsyncClient, test_user_token: str, db_session: AsyncSession, test_user: User):
+async def test_booking_multiple_items(
+    async_client: AsyncClient,
+    test_user_token: str,
+    db_session: AsyncSession,
+    test_user: User,
+):
     headers = {"Authorization": f"Bearer {test_user_token}"}
     listing_id, exp_id = await setup_test_data(db_session, test_user)
 
@@ -156,7 +179,7 @@ async def test_booking_multiple_items(async_client: AsyncClient, test_user_token
                 "start_time": "10:00:00",
                 "quantity": 1,
                 "guest_count": 2,
-            }
+            },
         ],
         "guests": [{"first_name": "T", "last_name": "U", "is_primary": True}],
     }

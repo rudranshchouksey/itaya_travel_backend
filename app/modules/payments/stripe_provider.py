@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from decimal import Decimal
 from typing import Any
 
 from app.core.config import settings
@@ -25,14 +24,12 @@ class StripePaymentProvider:
             raise RuntimeError(
                 "stripe SDK is required. Install with: pip install stripe"
             )
-        
+
         # Configure stripe api key
         stripe.api_key = settings.STRIPE_SECRET_KEY
 
     # Only retry transient errors
-    @with_backoff(
-        retryable_exceptions=(TransientRetryError,)
-    )
+    @with_backoff(retryable_exceptions=(TransientRetryError,))
     async def create_order(
         self,
         amount: int,
@@ -41,27 +38,27 @@ class StripePaymentProvider:
         notes: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
-        Create a PaymentIntent. 
+        Create a PaymentIntent.
         `receipt` is used as idempotency key to prevent duplicate charges.
         """
         import stripe
-        
+
         # Override the retry logic to only catch transient Stripe errors
         try:
             # Stripe uses smallest currency unit for most currencies
             # Exceptions exist (e.g. JPY has zero decimal), but our provider interface
             # assumes `amount` is already appropriately scaled.
-            
+
             # Idempotency key from receipt
             idempotency_key = receipt
-            
+
             intent = stripe.PaymentIntent.create(
                 amount=amount,
                 currency=currency.lower(),
                 metadata={"receipt": receipt, **(notes or {})},
                 idempotency_key=idempotency_key,
             )
-            
+
             return {
                 "id": intent.id,
                 "entity": "order",
@@ -108,7 +105,7 @@ class StripePaymentProvider:
         amount: int,
     ) -> dict[str, Any]:
         import stripe
-        
+
         try:
             intent = stripe.PaymentIntent.capture(payment_id, amount_to_capture=amount)
             return {
@@ -131,7 +128,7 @@ class StripePaymentProvider:
         payment_id: str,
     ) -> dict[str, Any]:
         import stripe
-        
+
         try:
             intent = stripe.PaymentIntent.retrieve(payment_id)
             return {
@@ -156,13 +153,13 @@ class StripePaymentProvider:
         notes: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         import stripe
-        
+
         try:
             # We use a unique idempotency key based on payment_id + amount + a unique part from notes if present
             # Or ideally from the backend refund ID if passed in notes
             refund_ref = (notes or {}).get("refund_id", f"{payment_id}_{amount}")
             idempotency_key = f"rfnd_{refund_ref}"
-            
+
             refund = stripe.Refund.create(
                 payment_intent=payment_id,
                 amount=amount,
@@ -174,7 +171,9 @@ class StripePaymentProvider:
                 "entity": "refund",
                 "amount": refund.amount,
                 "payment_id": payment_id,
-                "status": "processed" if refund.status == "succeeded" else refund.status,
+                "status": "processed"
+                if refund.status == "succeeded"
+                else refund.status,
             }
         except (stripe.error.RateLimitError, stripe.error.APIConnectionError) as e:
             raise e
@@ -190,15 +189,13 @@ class StripePaymentProvider:
         signature: str,
     ) -> bool:
         import stripe
-        
+
         webhook_secret = settings.STRIPE_WEBHOOK_SECRET
-        
+
         try:
             # Stripe Python SDK verifies signature and returns the event
             # Since this interface just returns a boolean, we'll verify it here
-            stripe.Webhook.Signature.verify_header(
-                body, signature, webhook_secret
-            )
+            stripe.Webhook.Signature.verify_header(body, signature, webhook_secret)
             return True
         except stripe.error.SignatureVerificationError:
             return False

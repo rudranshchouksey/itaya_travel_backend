@@ -17,6 +17,10 @@ from app.modules.bookings.models import (
     BookingStatus,
     validate_booking_transition,
 )
+from app.modules.payments.currency import (
+    get_currency_rate_provider,
+    resolve_display_currency,
+)
 from app.modules.payments.mock_provider import payment_provider
 from app.modules.payments.models import (
     Payment,
@@ -75,7 +79,10 @@ class FinancialService:
 
     @staticmethod
     async def record_refund_financials(
-        session: AsyncSession, refund: Refund, booking: Booking
+        session: AsyncSession,
+        refund: Refund,
+        booking: Booking,
+        payment: Payment | None = None,
     ) -> None:
         """Record the reversal of financials due to a refund."""
         if not booking.items:
@@ -89,11 +96,23 @@ class FinancialService:
 
         # Simple single/first provider allocation
         provider_id = provider_ids[0]
+
+        # Calculate the refund amount in the booking's base currency
+        refund_booking_amount = refund.amount
+        if refund.currency != booking.currency and payment and payment.amount > 0:
+            proportion = refund.amount / payment.amount
+            refund_booking_amount = (booking.total * proportion).quantize(
+                Decimal("0.01")
+            )
+        elif refund.currency != booking.currency and not payment:
+            # Fallback if payment is not provided (should not happen with updated call)
+            refund_booking_amount = booking.total
+
         refund_tx = ProviderTransaction(
             provider_id=provider_id,
             booking_id=booking.id,
-            amount=-refund.amount,
-            currency=refund.currency,
+            amount=-refund_booking_amount,
+            currency=booking.currency,
             transaction_type=TransactionType.REFUND,
             status=TransactionStatus.COMPLETED,
             reference=f"Refund Reversal: {refund.id}",
@@ -119,6 +138,9 @@ class PaymentService:
         booking_id: uuid.UUID,
         user_id: uuid.UUID,
         idempotency_key: str | None = None,
+        user_currency: str | None = None,
+        client_locale: str | None = None,
+        client_country: str | None = None,
     ) -> PaymentCreateResponse:
         # Check idempotency
         if idempotency_key:
@@ -158,10 +180,49 @@ class PaymentService:
 
         amount_minor = int(booking.total * 100)
 
+        # 1. Resolve Display/Transaction Currency
+        transaction_currency = resolve_display_currency(
+            user_explicit_currency=user_currency,
+            client_locale=client_locale,
+            client_country=client_country,
+        )
+
+        # 2. Convert Amount if needed
+        transaction_amount = booking.total
+        if transaction_currency != booking.currency:
+            rate_provider = get_currency_rate_provider()
+            exchange_rate = await rate_provider.get_exchange_rate(
+                from_currency=booking.currency, to_currency=transaction_currency
+            )
+            transaction_amount = (booking.total * exchange_rate).quantize(
+                Decimal("0.01")
+            )
+
+        if transaction_amount <= 0:
+            raise ValidationError(
+                "Calculated payment amount must be greater than zero."
+            )
+
+        # Stripe API mostly expects smallest currency unit, except for zero-decimal currencies
+        zero_decimal_currencies = {
+            "JPY",
+            "BIF",
+            "CLP",
+            "PYG",
+            "VUV",
+            "XAF",
+            "XOF",
+            "XPF",
+        }
+        if transaction_currency in zero_decimal_currencies:
+            amount_minor = int(transaction_amount)
+        else:
+            amount_minor = int(transaction_amount * 100)
+
         # Create Provider Order
         order_data = await payment_provider.create_order(
             amount=amount_minor,
-            currency=booking.currency,
+            currency=transaction_currency,
             receipt=str(booking.id),
         )
 
@@ -169,8 +230,8 @@ class PaymentService:
             booking_id=booking.id,
             provider=settings.PAYMENT_PROVIDER,
             provider_order_id=order_data.get("id"),
-            amount=booking.total,
-            currency=booking.currency,
+            amount=transaction_amount,
+            currency=transaction_currency,
             status=PaymentStatus.CREATED,
             idempotency_key=idempotency_key,
         )
@@ -344,7 +405,9 @@ class PaymentService:
                     ):
                         booking.booking_status = BookingStatus.PARTIALLY_REFUNDED
 
-            await FinancialService.record_refund_financials(session, refund, booking)
+            await FinancialService.record_refund_financials(
+                session, refund, booking, payment
+            )
 
         await session.commit()
         await session.refresh(refund)
@@ -391,16 +454,16 @@ class PaymentService:
                 payment_entity = (
                     payload.get("payload", {}).get("payment", {}).get("entity", {})
                 )
-                order_id = payment_entity.get("order_id") or payload.get("payload", {}).get(
-                    "order", {}
-                ).get("entity", {}).get("id")
+                order_id = payment_entity.get("order_id") or payload.get(
+                    "payload", {}
+                ).get("order", {}).get("entity", {}).get("id")
                 payment_id_str = payment_entity.get("id")
                 is_captured = True
         elif provider == "stripe":
             if event_type == "payment_intent.succeeded":
                 payment_intent = payload.get("data", {}).get("object", {})
                 payment_id_str = payment_intent.get("id")
-                # We stored our internal booking ID or payment reference in metadata or receipt, 
+                # We stored our internal booking ID or payment reference in metadata or receipt,
                 # but we also have provider_order_id in our DB as the PaymentIntent ID.
                 # So order_id for Stripe IS the payment_id_str.
                 order_id = payment_id_str

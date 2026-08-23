@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Any, Protocol
+from typing import Protocol
 
 from app.core.config import settings
 

@@ -26,15 +26,26 @@ router = APIRouter(tags=["Payments"])
     summary="Create a payment order/intent for a booking",
 )
 async def create_payment(
+    request: Request,
     session: SessionDep,
     current_user: Annotated[User, Depends(get_current_user)],
     request_in: PaymentCreateRequest,
 ):
+    client_locale = request.headers.get("Accept-Language")
+    client_country = (
+        request.headers.get("CF-IPCountry")
+        or request.headers.get("X-Vercel-IP-Country")
+        or request.headers.get("CloudFront-Viewer-Country")
+    )
+
     return await PaymentService.create_payment(
         session=session,
         booking_id=request_in.booking_id,
         user_id=current_user.id,
         idempotency_key=request_in.idempotency_key,
+        user_currency=request_in.user_currency,
+        client_locale=client_locale,
+        client_country=client_country,
     )
 
 
