@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
+    # Clerk Authentication
+    CLERK_PUBLISHABLE_KEY: str = ""
+    CLERK_SECRET_KEY: str = ""
+
     # Payment provider: "razorpay" or "mock"
     PAYMENT_PROVIDER: str = "mock"
     RAZORPAY_KEY_ID: str = ""
